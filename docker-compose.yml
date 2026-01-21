@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:15-alpine
+    container_name: instagram-mvp-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: instagram_mvp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - instagram-network
+
+  # Localstack (AWS S3 로컬 환경)
+  localstack:
+    image: localstack/localstack:latest
+    container_name: instagram-mvp-localstack
+    environment:
+      - SERVICES=s3
+      - DEBUG=0
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    volumes:
+      - localstack_data:/var/lib/localstack
+    networks:
+      - instagram-network
+
+volumes:
+  postgres_data:
+  localstack_data:
+
+networks:
+  instagram-network:
+    driver: bridge
