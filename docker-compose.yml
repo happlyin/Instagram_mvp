@@ -16,24 +16,8 @@ services:
     networks:
       - instagram-network
 
-  # Localstack (AWS S3 로컬 환경)
-  localstack:
-    image: localstack/localstack:latest
-    container_name: instagram-mvp-localstack
-    environment:
-      - SERVICES=s3
-      - DEBUG=0
-    ports:
-      - "4566:4566"
-      - "4571:4571"
-    volumes:
-      - localstack_data:/var/lib/localstack
-    networks:
-      - instagram-network
-
 volumes:
   postgres_data:
-  localstack_data:
 
 networks:
   instagram-network:

@@ -1,0 +1,187 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, LessThan } from 'typeorm';
+import { Post } from './entities/post.entity';
+import { PostImage } from './entities/post-image.entity';
+import { PostCaption } from './entities/post-caption.entity';
+import { StorageService, UploadedFile, StoredFile } from '../storage/storage.service';
+import { CreatePostDto, CreateCaptionDto } from './dto/create-post.dto';
+import {
+  PostResponseDto,
+  PostImageResponseDto,
+  PostCaptionResponseDto,
+  PostAuthorDto,
+  PaginatedPostsResponseDto,
+} from './dto/post-response.dto';
+
+@Injectable()
+export class PostsService {
+  constructor(
+    @InjectRepository(Post)
+    private postsRepository: Repository<Post>,
+    @InjectRepository(PostImage)
+    private postImagesRepository: Repository<PostImage>,
+    @InjectRepository(PostCaption)
+    private postCaptionsRepository: Repository<PostCaption>,
+    private storageService: StorageService,
+  ) {}
+
+  async createPost(
+    userId: string,
+    createPostDto: CreatePostDto,
+    imageFiles: UploadedFile[],
+  ): Promise<PostResponseDto> {
+    // 1. 이미지 업로드
+    const storedFiles = await this.storageService.uploadFiles(imageFiles, userId);
+
+    // 2. Post 생성
+    const post = this.postsRepository.create({
+      userId,
+    });
+    const savedPost = await this.postsRepository.save(post);
+
+    // 3. PostImage 생성
+    const images = await this.createPostImages(savedPost.id, storedFiles);
+
+    // 4. PostCaption 생성 (단일 캡션)
+    if (createPostDto.caption?.text) {
+      await this.createPostCaption(savedPost.id, createPostDto.caption);
+    }
+
+    // 5. Post 조회 (관계 포함)
+    const fullPost = await this.findPostById(savedPost.id);
+    if (!fullPost) {
+      throw new NotFoundException('생성된 포스트를 찾을 수 없습니다.');
+    }
+
+    return fullPost;
+  }
+
+  private async createPostImages(
+    postId: string,
+    storedFiles: StoredFile[],
+  ): Promise<PostImage[]> {
+    const images = storedFiles.map((file, index) =>
+      this.postImagesRepository.create({
+        postId,
+        imageUrl: file.url,
+        orderIndex: index,
+        originalFileName: file.originalFileName,
+        mimeType: file.mimeType,
+        fileSize: file.fileSize,
+      }),
+    );
+
+    return this.postImagesRepository.save(images);
+  }
+
+  private async createPostCaption(
+    postId: string,
+    caption: CreateCaptionDto,
+  ): Promise<PostCaption> {
+    const postCaption = this.postCaptionsRepository.create({
+      postId,
+      text: caption.text || '',
+      orderIndex: 0,
+      isBold: caption.isBold ?? false,
+      isItalic: caption.isItalic ?? false,
+      fontSize: caption.fontSize ?? 14,
+    });
+
+    return this.postCaptionsRepository.save(postCaption);
+  }
+
+  async findPostById(id: string): Promise<PostResponseDto | null> {
+    const post = await this.postsRepository.findOne({
+      where: { id },
+      relations: ['user', 'images', 'captions'],
+      order: {
+        images: { orderIndex: 'ASC' },
+        captions: { orderIndex: 'ASC' },
+      },
+    });
+
+    if (!post) return null;
+
+    return this.toResponseDto(post);
+  }
+
+  async findPosts(
+    limit: number = 10,
+    cursor?: string,
+  ): Promise<PaginatedPostsResponseDto> {
+    const queryBuilder = this.postsRepository
+      .createQueryBuilder('post')
+      .leftJoinAndSelect('post.user', 'user')
+      .leftJoinAndSelect('post.images', 'images')
+      .leftJoinAndSelect('post.captions', 'captions')
+      .orderBy('post.createdAt', 'DESC')
+      .addOrderBy('images.orderIndex', 'ASC')
+      .addOrderBy('captions.orderIndex', 'ASC')
+      .take(limit + 1); // 다음 페이지 존재 여부 확인을 위해 +1
+
+    if (cursor) {
+      const cursorDate = new Date(cursor);
+      queryBuilder.where('post.createdAt < :cursor', { cursor: cursorDate });
+    }
+
+    const posts = await queryBuilder.getMany();
+
+    const hasMore = posts.length > limit;
+    if (hasMore) {
+      posts.pop(); // 초과분 제거
+    }
+
+    const postDtos = posts.map((post) => this.toResponseDto(post));
+    const nextCursor =
+      hasMore && posts.length > 0
+        ? posts[posts.length - 1].createdAt.toISOString()
+        : null;
+
+    return {
+      posts: postDtos,
+      hasMore,
+      nextCursor,
+    };
+  }
+
+  private toResponseDto(post: Post): PostResponseDto {
+    const author: PostAuthorDto = {
+      id: post.user?.id || post.userId,
+      username: post.user?.username || 'Unknown',
+    };
+
+    const images: PostImageResponseDto[] = (post.images || [])
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((img) => ({
+        id: img.id,
+        imageUrl: img.imageUrl,
+        orderIndex: img.orderIndex,
+        originalFileName: img.originalFileName,
+        mimeType: img.mimeType,
+      }));
+
+    // 첫 번째 캡션만 사용 (단일 캡션)
+    const sortedCaptions = (post.captions || []).sort(
+      (a, b) => a.orderIndex - b.orderIndex,
+    );
+    const caption: PostCaptionResponseDto | null =
+      sortedCaptions.length > 0
+        ? {
+            id: sortedCaptions[0].id,
+            text: sortedCaptions[0].text,
+            isBold: sortedCaptions[0].isBold,
+            isItalic: sortedCaptions[0].isItalic,
+            fontSize: sortedCaptions[0].fontSize,
+          }
+        : null;
+
+    return {
+      id: post.id,
+      author,
+      images,
+      caption,
+      createdAt: post.createdAt,
+    };
+  }
+}

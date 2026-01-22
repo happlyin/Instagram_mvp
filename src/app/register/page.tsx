@@ -114,7 +114,7 @@ export default function RegisterPage() {
 
         {/* 로고 */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-instagram-purple via-instagram-primary to-instagram-gradient-start bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-instagram-purple via-instagram-primary to-instagram-gradient-start bg-clip-text text-transparent pb-1">
             Instagram
           </h1>
           <p className="text-gray-500 mt-2">친구들의 사진과 동영상을 보려면 가입하세요.</p>
