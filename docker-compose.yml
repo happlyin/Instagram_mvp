@@ -7,7 +7,7 @@ services:
     container_name: instagram-mvp-postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: NFSedge2020~
       POSTGRES_DB: instagram_mvp
     ports:
       - "5432:5432"
