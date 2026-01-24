@@ -5,6 +5,8 @@ import { Post } from './entities/post.entity';
 import { PostImage } from './entities/post-image.entity';
 import { PostCaption } from './entities/post-caption.entity';
 import { StorageService, UploadedFile, StoredFile } from '../storage/storage.service';
+import { LikesService } from '../likes/likes.service';
+import { CommentsService } from '../comments/comments.service';
 import { CreatePostDto, CreateCaptionDto } from './dto/create-post.dto';
 import {
   PostResponseDto,
@@ -24,6 +26,8 @@ export class PostsService {
     @InjectRepository(PostCaption)
     private postCaptionsRepository: Repository<PostCaption>,
     private storageService: StorageService,
+    private likesService: LikesService,
+    private commentsService: CommentsService,
   ) {}
 
   async createPost(
@@ -49,7 +53,7 @@ export class PostsService {
     }
 
     // 5. Post 조회 (관계 포함)
-    const fullPost = await this.findPostById(savedPost.id);
+    const fullPost = await this.findPostById(savedPost.id, userId);
     if (!fullPost) {
       throw new NotFoundException('생성된 포스트를 찾을 수 없습니다.');
     }
@@ -91,7 +95,7 @@ export class PostsService {
     return this.postCaptionsRepository.save(postCaption);
   }
 
-  async findPostById(id: string): Promise<PostResponseDto | null> {
+  async findPostById(id: string, currentUserId?: string): Promise<PostResponseDto | null> {
     const post = await this.postsRepository.findOne({
       where: { id },
       relations: ['user', 'images', 'captions'],
@@ -103,12 +107,23 @@ export class PostsService {
 
     if (!post) return null;
 
-    return this.toResponseDto(post);
+    // 좋아요/댓글 정보 조회
+    const likeInfo = currentUserId
+      ? await this.likesService.getLikeInfoForPosts([id], currentUserId)
+      : new Map();
+    const commentCounts = await this.commentsService.getCommentCounts([id]);
+
+    const postLikeInfo = likeInfo.get(id) || { likeCount: 0, isLikedByMe: false };
+    const commentCount = commentCounts.get(id) || 0;
+
+    return this.toResponseDto(post, postLikeInfo.likeCount, postLikeInfo.isLikedByMe, commentCount);
   }
 
   async findPosts(
     limit: number = 10,
     cursor?: string,
+    currentUserId?: string,
+    filterUserId?: string,
   ): Promise<PaginatedPostsResponseDto> {
     const queryBuilder = this.postsRepository
       .createQueryBuilder('post')
@@ -120,9 +135,17 @@ export class PostsService {
       .addOrderBy('captions.orderIndex', 'ASC')
       .take(limit + 1); // 다음 페이지 존재 여부 확인을 위해 +1
 
+    if (filterUserId) {
+      queryBuilder.where('post.userId = :filterUserId', { filterUserId });
+    }
+
     if (cursor) {
       const cursorDate = new Date(cursor);
-      queryBuilder.where('post.createdAt < :cursor', { cursor: cursorDate });
+      if (filterUserId) {
+        queryBuilder.andWhere('post.createdAt < :cursor', { cursor: cursorDate });
+      } else {
+        queryBuilder.where('post.createdAt < :cursor', { cursor: cursorDate });
+      }
     }
 
     const posts = await queryBuilder.getMany();
@@ -132,7 +155,19 @@ export class PostsService {
       posts.pop(); // 초과분 제거
     }
 
-    const postDtos = posts.map((post) => this.toResponseDto(post));
+    // 배치로 좋아요/댓글 정보 조회 (N+1 방지)
+    const postIds = posts.map((p) => p.id);
+    const likeInfoMap = currentUserId
+      ? await this.likesService.getLikeInfoForPosts(postIds, currentUserId)
+      : new Map();
+    const commentCountMap = await this.commentsService.getCommentCounts(postIds);
+
+    const postDtos = posts.map((post) => {
+      const likeInfo = likeInfoMap.get(post.id) || { likeCount: 0, isLikedByMe: false };
+      const commentCount = commentCountMap.get(post.id) || 0;
+      return this.toResponseDto(post, likeInfo.likeCount, likeInfo.isLikedByMe, commentCount);
+    });
+
     const nextCursor =
       hasMore && posts.length > 0
         ? posts[posts.length - 1].createdAt.toISOString()
@@ -145,10 +180,16 @@ export class PostsService {
     };
   }
 
-  private toResponseDto(post: Post): PostResponseDto {
+  private toResponseDto(
+    post: Post,
+    likeCount: number = 0,
+    isLikedByMe: boolean = false,
+    commentCount: number = 0,
+  ): PostResponseDto {
     const author: PostAuthorDto = {
       id: post.user?.id || post.userId,
       username: post.user?.username || 'Unknown',
+      profileImageUrl: post.user?.profileImageUrl || null,
     };
 
     const images: PostImageResponseDto[] = (post.images || [])
@@ -181,6 +222,9 @@ export class PostsService {
       author,
       images,
       caption,
+      likeCount,
+      isLikedByMe,
+      commentCount,
       createdAt: post.createdAt,
     };
   }

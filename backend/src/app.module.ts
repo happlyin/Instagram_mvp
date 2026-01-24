@@ -8,11 +8,18 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { PostsModule } from './posts/posts.module';
+import { LikesModule } from './likes/likes.module';
+import { CommentsModule } from './comments/comments.module';
+import { FollowsModule } from './follows/follows.module';
+import { ProfileModule } from './profile/profile.module';
 import { User } from './users/entities/user.entity';
 import { RefreshToken } from './auth/entities/refresh-token.entity';
 import { Post } from './posts/entities/post.entity';
 import { PostImage } from './posts/entities/post-image.entity';
 import { PostCaption } from './posts/entities/post-caption.entity';
+import { Like } from './likes/entities/like.entity';
+import { Comment } from './comments/entities/comment.entity';
+import { Follow } from './follows/entities/follow.entity';
 
 @Module({
   imports: [
@@ -31,7 +38,7 @@ import { PostCaption } from './posts/entities/post-caption.entity';
         username: configService.get<string>('DB_USERNAME') || 'postgres',
         password: configService.get<string>('DB_PASSWORD') || 'postgres',
         database: configService.get<string>('DB_DATABASE') || 'instagram_mvp',
-        entities: [User, RefreshToken, Post, PostImage, PostCaption],
+        entities: [User, RefreshToken, Post, PostImage, PostCaption, Like, Comment, Follow],
         synchronize: configService.get<string>('NODE_ENV') === 'development',
         logging: configService.get<string>('NODE_ENV') === 'development',
       }),
@@ -45,6 +52,10 @@ import { PostCaption } from './posts/entities/post-caption.entity';
     AuthModule,
     UsersModule,
     PostsModule,
+    LikesModule,
+    CommentsModule,
+    FollowsModule,
+    ProfileModule,
   ],
   controllers: [AppController],
   providers: [AppService],

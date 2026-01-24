@@ -114,16 +114,19 @@ export class PostsController {
    */
   @Get()
   async getPosts(
+    @Req() req: Request,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('userId') userId?: string,
   ) {
+    const user = req.user as AuthenticatedUser;
     const parsedLimit = limit ? parseInt(limit, 10) : 10;
 
     if (parsedLimit < 1 || parsedLimit > 50) {
       throw new BadRequestException('limit은 1-50 사이여야 합니다.');
     }
 
-    return this.postsService.findPosts(parsedLimit, cursor);
+    return this.postsService.findPosts(parsedLimit, cursor, user.userId, userId);
   }
 
   /**
@@ -131,8 +134,12 @@ export class PostsController {
    * GET /posts/:id
    */
   @Get(':id')
-  async getPost(@Param('id') id: string) {
-    const post = await this.postsService.findPostById(id);
+  async getPost(
+    @Req() req: Request,
+    @Param('id') id: string,
+  ) {
+    const user = req.user as AuthenticatedUser;
+    const post = await this.postsService.findPostById(id, user.userId);
 
     if (!post) {
       throw new BadRequestException('피드를 찾을 수 없습니다.');

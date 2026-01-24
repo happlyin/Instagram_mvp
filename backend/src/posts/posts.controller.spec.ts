@@ -27,18 +27,20 @@ describe('PostsController', () => {
         mimeType: 'image/jpeg',
       },
     ],
-    captions: [
-      {
-        id: 'cap-1',
-        text: 'Test caption',
-        orderIndex: 0,
-        isBold: false,
-        isItalic: false,
-        fontSize: 14,
-      },
-    ],
+    caption: {
+      id: 'cap-1',
+      text: 'Test caption',
+      isBold: false,
+      isItalic: false,
+      fontSize: 14,
+    },
+    likeCount: 0,
+    isLikedByMe: false,
+    commentCount: 0,
     createdAt: new Date('2025-01-22T10:00:00Z'),
   };
+
+  const mockReq = { user: mockUser } as any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -128,10 +130,10 @@ describe('PostsController', () => {
 
       postsService.findPosts.mockResolvedValue(mockResponse);
 
-      const result = await controller.getPosts('10');
+      const result = await controller.getPosts(mockReq, '10');
 
       expect(result).toEqual(mockResponse);
-      expect(postsService.findPosts).toHaveBeenCalledWith(10, undefined);
+      expect(postsService.findPosts).toHaveBeenCalledWith(10, undefined, 'user-123', undefined);
     });
 
     it('should use default limit when not provided', async () => {
@@ -143,9 +145,9 @@ describe('PostsController', () => {
 
       postsService.findPosts.mockResolvedValue(mockResponse);
 
-      await controller.getPosts();
+      await controller.getPosts(mockReq);
 
-      expect(postsService.findPosts).toHaveBeenCalledWith(10, undefined);
+      expect(postsService.findPosts).toHaveBeenCalledWith(10, undefined, 'user-123', undefined);
     });
 
     it('should pass cursor for pagination', async () => {
@@ -158,14 +160,14 @@ describe('PostsController', () => {
 
       postsService.findPosts.mockResolvedValue(mockResponse);
 
-      await controller.getPosts('10', cursor);
+      await controller.getPosts(mockReq, '10', cursor);
 
-      expect(postsService.findPosts).toHaveBeenCalledWith(10, cursor);
+      expect(postsService.findPosts).toHaveBeenCalledWith(10, cursor, 'user-123', undefined);
     });
 
     it('should throw error when limit is out of range', async () => {
-      await expect(controller.getPosts('0')).rejects.toThrow(BadRequestException);
-      await expect(controller.getPosts('51')).rejects.toThrow(BadRequestException);
+      await expect(controller.getPosts(mockReq, '0')).rejects.toThrow(BadRequestException);
+      await expect(controller.getPosts(mockReq, '51')).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -173,16 +175,16 @@ describe('PostsController', () => {
     it('should return a single post', async () => {
       postsService.findPostById.mockResolvedValue(mockPost);
 
-      const result = await controller.getPost('post-123');
+      const result = await controller.getPost(mockReq, 'post-123');
 
       expect(result).toEqual(mockPost);
-      expect(postsService.findPostById).toHaveBeenCalledWith('post-123');
+      expect(postsService.findPostById).toHaveBeenCalledWith('post-123', 'user-123');
     });
 
     it('should throw error when post not found', async () => {
       postsService.findPostById.mockResolvedValue(null);
 
-      await expect(controller.getPost('non-existent')).rejects.toThrow(
+      await expect(controller.getPost(mockReq, 'non-existent')).rejects.toThrow(
         BadRequestException,
       );
     });

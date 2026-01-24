@@ -9,6 +9,8 @@ import { PostImage } from './entities/post-image.entity';
 import { PostCaption } from './entities/post-caption.entity';
 import { StorageModule } from '../storage/storage.module';
 import { AuthModule } from '../auth/auth.module';
+import { LikesModule } from '../likes/likes.module';
+import { CommentsModule } from '../comments/comments.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { AuthModule } from '../auth/auth.module';
     }),
     StorageModule,
     AuthModule,
+    LikesModule,
+    CommentsModule,
   ],
   controllers: [PostsController],
   providers: [PostsService],

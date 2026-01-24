@@ -17,6 +17,7 @@ export class PostCaptionResponseDto {
 export class PostAuthorDto {
   id: string;
   username: string;
+  profileImageUrl: string | null;
 }
 
 export class PostResponseDto {
@@ -24,6 +25,9 @@ export class PostResponseDto {
   author: PostAuthorDto;
   images: PostImageResponseDto[];
   caption: PostCaptionResponseDto | null;
+  likeCount: number;
+  isLikedByMe: boolean;
+  commentCount: number;
   createdAt: Date;
 }
 

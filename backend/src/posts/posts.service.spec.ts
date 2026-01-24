@@ -6,6 +6,8 @@ import { Post } from './entities/post.entity';
 import { PostImage } from './entities/post-image.entity';
 import { PostCaption } from './entities/post-caption.entity';
 import { StorageService, StoredFile, UploadedFile } from '../storage/storage.service';
+import { LikesService } from '../likes/likes.service';
+import { CommentsService } from '../comments/comments.service';
 import { CreatePostDto } from './dto/create-post.dto';
 
 describe('PostsService', () => {
@@ -14,6 +16,8 @@ describe('PostsService', () => {
   let postImageRepository: jest.Mocked<Repository<PostImage>>;
   let postCaptionRepository: jest.Mocked<Repository<PostCaption>>;
   let storageService: jest.Mocked<StorageService>;
+  let likesService: jest.Mocked<LikesService>;
+  let commentsService: jest.Mocked<CommentsService>;
 
   const mockUser = {
     id: 'user-123',
@@ -83,6 +87,22 @@ describe('PostsService', () => {
             deleteFile: jest.fn(),
           },
         },
+        {
+          provide: LikesService,
+          useValue: {
+            getLikeInfoForPosts: jest.fn(),
+            toggleLike: jest.fn(),
+            getLikeCount: jest.fn(),
+            isLikedByUser: jest.fn(),
+          },
+        },
+        {
+          provide: CommentsService,
+          useValue: {
+            getCommentCounts: jest.fn(),
+            getCommentCount: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -91,16 +111,15 @@ describe('PostsService', () => {
     postImageRepository = module.get(getRepositoryToken(PostImage));
     postCaptionRepository = module.get(getRepositoryToken(PostCaption));
     storageService = module.get(StorageService);
+    likesService = module.get(LikesService);
+    commentsService = module.get(CommentsService);
   });
 
   describe('createPost', () => {
-    it('should create a post with images and captions', async () => {
+    it('should create a post with images and caption', async () => {
       const userId = 'user-123';
       const createPostDto: CreatePostDto = {
-        captions: [
-          { text: 'First caption', orderIndex: 0, isBold: true },
-          { text: 'Second caption', orderIndex: 1, isItalic: true, fontSize: 18 },
-        ],
+        caption: { text: 'First caption', isBold: true },
       };
       const imageFiles: UploadedFile[] = [
         {
@@ -126,28 +145,16 @@ describe('PostsService', () => {
         } as PostImage,
       ];
 
-      const mockCaptions: PostCaption[] = [
-        {
-          id: 'cap-1',
-          postId: 'post-123',
-          text: 'First caption',
-          orderIndex: 0,
-          isBold: true,
-          isItalic: false,
-          fontSize: 14,
-          createdAt: new Date(),
-        } as PostCaption,
-        {
-          id: 'cap-2',
-          postId: 'post-123',
-          text: 'Second caption',
-          orderIndex: 1,
-          isBold: false,
-          isItalic: true,
-          fontSize: 18,
-          createdAt: new Date(),
-        } as PostCaption,
-      ];
+      const mockCaption: PostCaption = {
+        id: 'cap-1',
+        postId: 'post-123',
+        text: 'First caption',
+        orderIndex: 0,
+        isBold: true,
+        isItalic: false,
+        fontSize: 14,
+        createdAt: new Date(),
+      } as PostCaption;
 
       storageService.uploadFiles.mockResolvedValue([mockStoredFiles[0]]);
       postRepository.create.mockReturnValue(mockPost as Post);
@@ -155,12 +162,20 @@ describe('PostsService', () => {
       postImageRepository.create.mockImplementation((data) => data as PostImage);
       postImageRepository.save.mockResolvedValue(mockImages);
       postCaptionRepository.create.mockImplementation((data) => data as PostCaption);
-      postCaptionRepository.save.mockResolvedValue(mockCaptions);
+      postCaptionRepository.save.mockResolvedValue(mockCaption as any);
       postRepository.findOne.mockResolvedValue({
         ...mockPost,
         images: mockImages,
-        captions: mockCaptions,
+        captions: [mockCaption],
       } as Post);
+
+      // Mock likes/comments for findPostById call
+      likesService.getLikeInfoForPosts.mockResolvedValue(
+        new Map([['post-123', { likeCount: 0, isLikedByMe: false }]]),
+      );
+      commentsService.getCommentCounts.mockResolvedValue(
+        new Map([['post-123', 0]]),
+      );
 
       const result = await service.createPost(userId, createPostDto, imageFiles);
 
@@ -169,12 +184,14 @@ describe('PostsService', () => {
       expect(postRepository.save).toHaveBeenCalled();
       expect(result.id).toBe('post-123');
       expect(result.images).toHaveLength(1);
-      expect(result.captions).toHaveLength(2);
-      expect(result.captions[0].isBold).toBe(true);
-      expect(result.captions[1].isItalic).toBe(true);
+      expect(result.caption).not.toBeNull();
+      expect(result.caption!.isBold).toBe(true);
+      expect(result.likeCount).toBe(0);
+      expect(result.isLikedByMe).toBe(false);
+      expect(result.commentCount).toBe(0);
     });
 
-    it('should create a post without captions', async () => {
+    it('should create a post without caption', async () => {
       const userId = 'user-123';
       const createPostDto: CreatePostDto = {};
       const imageFiles: UploadedFile[] = [
@@ -212,15 +229,23 @@ describe('PostsService', () => {
         captions: [],
       } as Post);
 
+      // Mock likes/comments for findPostById call
+      likesService.getLikeInfoForPosts.mockResolvedValue(
+        new Map([['post-123', { likeCount: 0, isLikedByMe: false }]]),
+      );
+      commentsService.getCommentCounts.mockResolvedValue(
+        new Map([['post-123', 0]]),
+      );
+
       const result = await service.createPost(userId, createPostDto, imageFiles);
 
-      expect(result.captions).toHaveLength(0);
+      expect(result.caption).toBeNull();
       expect(result.images).toHaveLength(1);
     });
   });
 
   describe('findPostById', () => {
-    it('should return a post by id', async () => {
+    it('should return a post by id with like/comment info', async () => {
       const postWithRelations = {
         ...mockPost,
         images: [
@@ -245,14 +270,24 @@ describe('PostsService', () => {
       } as Post;
 
       postRepository.findOne.mockResolvedValue(postWithRelations);
+      likesService.getLikeInfoForPosts.mockResolvedValue(
+        new Map([['post-123', { likeCount: 5, isLikedByMe: true }]]),
+      );
+      commentsService.getCommentCounts.mockResolvedValue(
+        new Map([['post-123', 3]]),
+      );
 
-      const result = await service.findPostById('post-123');
+      const result = await service.findPostById('post-123', 'user-123');
 
       expect(result).not.toBeNull();
       expect(result!.id).toBe('post-123');
       expect(result!.author.username).toBe('testuser');
       expect(result!.images).toHaveLength(1);
-      expect(result!.captions).toHaveLength(1);
+      expect(result!.caption).not.toBeNull();
+      expect(result!.caption!.text).toBe('Test caption');
+      expect(result!.likeCount).toBe(5);
+      expect(result!.isLikedByMe).toBe(true);
+      expect(result!.commentCount).toBe(3);
     });
 
     it('should return null if post not found', async () => {
@@ -262,10 +297,31 @@ describe('PostsService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('should return likeCount 0 and isLikedByMe false when no currentUserId', async () => {
+      const postWithRelations = {
+        ...mockPost,
+        images: [],
+        captions: [],
+      } as Post;
+
+      postRepository.findOne.mockResolvedValue(postWithRelations);
+      commentsService.getCommentCounts.mockResolvedValue(
+        new Map([['post-123', 0]]),
+      );
+
+      const result = await service.findPostById('post-123');
+
+      expect(result).not.toBeNull();
+      expect(result!.likeCount).toBe(0);
+      expect(result!.isLikedByMe).toBe(false);
+      expect(result!.commentCount).toBe(0);
+      expect(likesService.getLikeInfoForPosts).not.toHaveBeenCalled();
+    });
   });
 
   describe('findPosts', () => {
-    it('should return paginated posts', async () => {
+    it('should return paginated posts with like/comment info', async () => {
       const mockPosts = [
         {
           ...mockPost,
@@ -293,11 +349,28 @@ describe('PostsService', () => {
       };
 
       postRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      likesService.getLikeInfoForPosts.mockResolvedValue(
+        new Map([
+          ['post-1', { likeCount: 2, isLikedByMe: true }],
+          ['post-2', { likeCount: 0, isLikedByMe: false }],
+        ]),
+      );
+      commentsService.getCommentCounts.mockResolvedValue(
+        new Map([
+          ['post-1', 5],
+          ['post-2', 1],
+        ]),
+      );
 
-      const result = await service.findPosts(10);
+      const result = await service.findPosts(10, undefined, 'user-123');
 
       expect(result.posts).toHaveLength(2);
       expect(result.hasMore).toBe(false);
+      expect(result.posts[0].likeCount).toBe(2);
+      expect(result.posts[0].isLikedByMe).toBe(true);
+      expect(result.posts[0].commentCount).toBe(5);
+      expect(result.posts[1].likeCount).toBe(0);
+      expect(result.posts[1].commentCount).toBe(1);
       expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('post.createdAt', 'DESC');
     });
 
@@ -307,7 +380,7 @@ describe('PostsService', () => {
         .map((_, i) => ({
           ...mockPost,
           id: `post-${i}`,
-          createdAt: new Date(Date.now() - i * 3600000), // 1시간씩 과거
+          createdAt: new Date(Date.now() - i * 3600000),
           images: [],
           captions: [],
         }));
@@ -322,8 +395,10 @@ describe('PostsService', () => {
       };
 
       postRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      likesService.getLikeInfoForPosts.mockResolvedValue(new Map());
+      commentsService.getCommentCounts.mockResolvedValue(new Map());
 
-      const result = await service.findPosts(10, '2025-01-22T12:00:00Z');
+      const result = await service.findPosts(10, '2025-01-22T12:00:00Z', 'user-123');
 
       expect(result.hasMore).toBe(true);
       expect(result.posts).toHaveLength(10);
@@ -342,6 +417,7 @@ describe('PostsService', () => {
       };
 
       postRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      commentsService.getCommentCounts.mockResolvedValue(new Map());
 
       const result = await service.findPosts(10);
 

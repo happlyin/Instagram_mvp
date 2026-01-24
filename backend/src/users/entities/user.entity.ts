@@ -24,6 +24,9 @@ export class User {
   @Index()
   username: string; // 닉네임
 
+  @Column({ nullable: true })
+  profileImageUrl: string; // 프로필 이미지 경로
+
   @Column({ default: 0 })
   loginCount: number; // 접속 횟수
 
