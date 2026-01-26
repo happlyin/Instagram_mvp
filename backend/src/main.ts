@@ -1,7 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
+import { seedAdmin } from './seeds/admin-seed';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -27,8 +29,12 @@ async function bootstrap() {
   // API 접두사
   app.setGlobalPrefix('api');
 
+  // Admin 계정 시드
+  const dataSource = app.get(DataSource);
+  await seedAdmin(dataSource);
+
   const port = process.env.PORT || 4000;
   await app.listen(port);
-  console.log(`🚀 Backend server running on http://localhost:${port}`);
+  console.log(`Backend server running on http://localhost:${port}`);
 }
 bootstrap();

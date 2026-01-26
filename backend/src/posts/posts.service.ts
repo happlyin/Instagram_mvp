@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { Post } from './entities/post.entity';
@@ -7,6 +7,7 @@ import { PostCaption } from './entities/post-caption.entity';
 import { StorageService, UploadedFile, StoredFile } from '../storage/storage.service';
 import { LikesService } from '../likes/likes.service';
 import { CommentsService } from '../comments/comments.service';
+import { ReportsService } from '../reports/reports.service';
 import { CreatePostDto, CreateCaptionDto } from './dto/create-post.dto';
 import {
   PostResponseDto,
@@ -28,6 +29,8 @@ export class PostsService {
     private storageService: StorageService,
     private likesService: LikesService,
     private commentsService: CommentsService,
+    @Inject(forwardRef(() => ReportsService))
+    private reportsService: ReportsService,
   ) {}
 
   async createPost(
@@ -125,27 +128,34 @@ export class PostsService {
     currentUserId?: string,
     filterUserId?: string,
   ): Promise<PaginatedPostsResponseDto> {
+    // 현재 유저가 신고한 게시물 ID 목록 조회
+    const reportedPostIds = currentUserId
+      ? await this.reportsService.getReportedPostIdsByUser(currentUserId)
+      : [];
+
     const queryBuilder = this.postsRepository
       .createQueryBuilder('post')
       .leftJoinAndSelect('post.user', 'user')
       .leftJoinAndSelect('post.images', 'images')
       .leftJoinAndSelect('post.captions', 'captions')
+      .where('post.isDeleted = :isDeleted', { isDeleted: false })
       .orderBy('post.createdAt', 'DESC')
       .addOrderBy('images.orderIndex', 'ASC')
       .addOrderBy('captions.orderIndex', 'ASC')
       .take(limit + 1); // 다음 페이지 존재 여부 확인을 위해 +1
 
+    // 신고한 게시물 제외
+    if (reportedPostIds.length > 0) {
+      queryBuilder.andWhere('post.id NOT IN (:...reportedPostIds)', { reportedPostIds });
+    }
+
     if (filterUserId) {
-      queryBuilder.where('post.userId = :filterUserId', { filterUserId });
+      queryBuilder.andWhere('post.userId = :filterUserId', { filterUserId });
     }
 
     if (cursor) {
       const cursorDate = new Date(cursor);
-      if (filterUserId) {
-        queryBuilder.andWhere('post.createdAt < :cursor', { cursor: cursorDate });
-      } else {
-        queryBuilder.where('post.createdAt < :cursor', { cursor: cursorDate });
-      }
+      queryBuilder.andWhere('post.createdAt < :cursor', { cursor: cursorDate });
     }
 
     const posts = await queryBuilder.getMany();

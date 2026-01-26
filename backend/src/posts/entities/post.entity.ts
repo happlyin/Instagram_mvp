@@ -38,6 +38,10 @@ export class Post {
   })
   captions: PostCaption[];
 
+  @Column({ default: false })
+  @Index()
+  isDeleted: boolean;
+
   @CreateDateColumn()
   @Index()
   createdAt: Date;

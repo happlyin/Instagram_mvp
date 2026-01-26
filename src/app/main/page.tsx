@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ReportModal from '../../components/ReportModal';
 
 interface PostImage {
   id: string;
@@ -52,6 +53,8 @@ export default function MainPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [reportModalPostId, setReportModalPostId] = useState<string | null>(null);
+  const [isReportLoading, setIsReportLoading] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -206,6 +209,36 @@ export default function MainPage() {
     router.push('/');
   };
 
+  // 게시물 신고
+  const handleReport = async (reason: string) => {
+    if (!reportModalPostId) return;
+
+    setIsReportLoading(true);
+    try {
+      const response = await authenticatedFetch(
+        `${API_BASE_URL}/posts/${reportModalPostId}/report`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || '신고에 실패했습니다.');
+      }
+
+      // 신고 성공 - 해당 게시물을 목록에서 제거
+      setPosts((prev) => prev.filter((p) => p.id !== reportModalPostId));
+      setReportModalPostId(null);
+    } catch (err: any) {
+      throw err;
+    } finally {
+      setIsReportLoading(false);
+    }
+  };
+
   // 시간 포맷팅
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -289,6 +322,7 @@ export default function MainPage() {
             post={post}
             formatTime={formatTime}
             authenticatedFetch={authenticatedFetch}
+            currentUsername={currentUsername}
             onLikeUpdate={(postId, liked, likeCount) => {
               setPosts((prev) =>
                 prev.map((p) =>
@@ -296,6 +330,7 @@ export default function MainPage() {
                 )
               );
             }}
+            onReportClick={(postId) => setReportModalPostId(postId)}
           />
         ))}
 
@@ -334,6 +369,14 @@ export default function MainPage() {
           />
         </svg>
       </Link>
+
+      {/* 신고 모달 */}
+      <ReportModal
+        isOpen={reportModalPostId !== null}
+        onClose={() => setReportModalPostId(null)}
+        onReport={handleReport}
+        isLoading={isReportLoading}
+      />
     </main>
   );
 }
@@ -343,12 +386,16 @@ function FeedCard({
   post,
   formatTime,
   authenticatedFetch,
+  currentUsername,
   onLikeUpdate,
+  onReportClick,
 }: {
   post: Post;
   formatTime: (date: string) => string;
   authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  currentUsername: string | null;
   onLikeUpdate: (postId: string, liked: boolean, likeCount: number) => void;
+  onReportClick: (postId: string) => void;
 }) {
   const router = useRouter();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -478,34 +525,52 @@ function FeedCard({
         )}
       </div>
 
-      {/* 좋아요/댓글 아이콘 */}
-      <div className="flex items-center px-4 py-2">
-        <button
-          onClick={handleLikeToggle}
-          disabled={isLikeLoading}
-          className="flex items-center gap-1 p-1 hover:opacity-60 transition-opacity"
-        >
-          {post.isLikedByMe ? (
-            <svg className="w-7 h-7 text-red-500" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+      {/* 액션 버튼: 신고(왼쪽), 좋아요/댓글(오른쪽) */}
+      <div className="flex items-center justify-between px-4 py-2">
+        {/* 왼쪽: 신고 버튼 (본인 게시물에는 표시 안함) */}
+        {currentUsername !== post.author.username ? (
+          <button
+            onClick={() => onReportClick(post.id)}
+            className="flex items-center gap-1 p-1 text-gray-500 hover:text-red-500 transition-colors"
+            title="신고하기"
+          >
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" />
             </svg>
-          ) : (
-            <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-            </svg>
-          )}
-          <span className="text-sm font-semibold">{post.likeCount}</span>
-        </button>
+          </button>
+        ) : (
+          <div />
+        )}
 
-        <button
-          onClick={handleCommentClick}
-          className="flex items-center gap-1 p-1 ml-3 hover:opacity-60 transition-opacity"
-        >
-          <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
-          </svg>
-          <span className="text-sm font-semibold">{post.commentCount}</span>
-        </button>
+        {/* 오른쪽: 좋아요, 댓글 */}
+        <div className="flex items-center">
+          <button
+            onClick={handleLikeToggle}
+            disabled={isLikeLoading}
+            className="flex items-center gap-1 p-1 hover:opacity-60 transition-opacity"
+          >
+            {post.isLikedByMe ? (
+              <svg className="w-7 h-7 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+              </svg>
+            ) : (
+              <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
+            )}
+            <span className="text-sm font-semibold">{post.likeCount}</span>
+          </button>
+
+          <button
+            onClick={handleCommentClick}
+            className="flex items-center gap-1 p-1 ml-3 hover:opacity-60 transition-opacity"
+          >
+            <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
+            </svg>
+            <span className="text-sm font-semibold">{post.commentCount}</span>
+          </button>
+        </div>
       </div>
 
       {/* 캡션 */}

@@ -3,11 +3,13 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
+import { UserRole } from '../../users/entities/user.entity';
 
 export interface JwtPayload {
   sub: string; // userId
   email: string;
   username: string;
+  role: UserRole;
   iat?: number;
   exp?: number;
 }
@@ -49,6 +51,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       userId: payload.sub,
       email: payload.email,
       username: payload.username,
+      role: payload.role,
     };
   }
 }

@@ -8,7 +8,7 @@ import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -17,6 +17,7 @@ export interface TokenResponse {
   accessToken: string;
   refreshToken: string;
   expiresAt: number; // Unix timestamp (밀리초)
+  role: UserRole;
 }
 
 export interface AccessTokenResponse {
@@ -96,6 +97,13 @@ export class AuthService {
       );
     }
 
+    // 정지된 계정 체크
+    if (user.isSuspended) {
+      throw new UnauthorizedException(
+        '정지된 계정입니다. 관리자에게 문의하세요.',
+      );
+    }
+
     // 로그인 정보 업데이트 (접속 횟수, 최근 접속 시간)
     await this.userRepository.update(user.id, {
       loginCount: user.loginCount + 1,
@@ -168,6 +176,7 @@ export class AuthService {
       accessToken,
       refreshToken,
       expiresAt,
+      role: user.role,
     };
   }
 
@@ -179,6 +188,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       username: user.username,
+      role: user.role,
     };
 
     return this.jwtService.sign(payload, {

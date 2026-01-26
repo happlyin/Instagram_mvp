@@ -15,6 +15,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { UserRole } from '../users/entities/user.entity';
 
 @Controller('auth')
 export class AuthController {
@@ -52,7 +53,7 @@ export class AuthController {
     @Body() loginDto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { accessToken, refreshToken, expiresAt } =
+    const { accessToken, refreshToken, expiresAt, role } =
       await this.authService.login(loginDto);
 
     // Access Token을 쿠키에 저장 (HttpOnly)
@@ -62,6 +63,7 @@ export class AuthController {
       message: '로그인이 완료되었습니다.',
       refreshToken, // 클라이언트에서 로컬스토리지에 저장
       expiresAt, // 클라이언트에서 만료시간 확인용
+      role, // 클라이언트에서 권한에 따른 리다이렉트용
     };
   }
 
@@ -117,7 +119,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async verify(@Req() req: Request) {
-    const user = req.user as { userId: string; email: string; username: string };
+    const user = req.user as { userId: string; email: string; username: string; role: UserRole };
     return {
       message: '토큰이 유효합니다.',
       valid: true,
@@ -125,6 +127,7 @@ export class AuthController {
         userId: user.userId,
         email: user.email,
         username: user.username,
+        role: user.role,
       },
     };
   }

@@ -7,6 +7,11 @@ import {
   Index,
 } from 'typeorm';
 
+export enum UserRole {
+  USER = 'user',
+  ADMIN = 'admin',
+}
+
 @Entity('users')
 @Index(['lastLoginAt', 'loginCount']) // 최근 접속순, 자주 접속하는 계정 우선 검색
 export class User {
@@ -33,6 +38,16 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   @Index()
   lastLoginAt: Date; // 최근 접속 시간
+
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.USER,
+  })
+  role: UserRole; // 권한 (user, admin)
+
+  @Column({ default: false })
+  isSuspended: boolean; // 계정 정지 여부
 
   @CreateDateColumn()
   createdAt: Date;

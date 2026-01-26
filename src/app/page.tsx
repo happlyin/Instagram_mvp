@@ -29,16 +29,22 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError('이메일 또는 비밀번호가 일치하지 않습니다.');
+        // 서버에서 반환하는 에러 메시지 사용 (정지된 계정 등)
+        setError(data.message || '이메일 또는 비밀번호가 일치하지 않습니다.');
         return;
       }
 
       // Refresh Token을 로컬스토리지에 저장
       localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('tokenExpiresAt', data.expiresAt.toString());
+      localStorage.setItem('userRole', data.role);
 
-      // 메인 페이지로 이동
-      router.push('/main');
+      // 권한에 따른 리다이렉트
+      if (data.role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/main');
+      }
     } catch (err) {
       setError('이메일 또는 비밀번호가 일치하지 않습니다.');
     } finally {

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -11,6 +11,7 @@ import { StorageModule } from '../storage/storage.module';
 import { AuthModule } from '../auth/auth.module';
 import { LikesModule } from '../likes/likes.module';
 import { CommentsModule } from '../comments/comments.module';
+import { ReportsModule } from '../reports/reports.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { CommentsModule } from '../comments/comments.module';
     AuthModule,
     LikesModule,
     CommentsModule,
+    forwardRef(() => ReportsModule),
   ],
   controllers: [PostsController],
   providers: [PostsService],

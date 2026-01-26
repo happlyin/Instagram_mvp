@@ -8,6 +8,7 @@ import { PostCaption } from './entities/post-caption.entity';
 import { StorageService, StoredFile, UploadedFile } from '../storage/storage.service';
 import { LikesService } from '../likes/likes.service';
 import { CommentsService } from '../comments/comments.service';
+import { ReportsService } from '../reports/reports.service';
 import { CreatePostDto } from './dto/create-post.dto';
 
 describe('PostsService', () => {
@@ -18,6 +19,7 @@ describe('PostsService', () => {
   let storageService: jest.Mocked<StorageService>;
   let likesService: jest.Mocked<LikesService>;
   let commentsService: jest.Mocked<CommentsService>;
+  let reportsService: jest.Mocked<ReportsService>;
 
   const mockUser = {
     id: 'user-123',
@@ -103,6 +105,15 @@ describe('PostsService', () => {
             getCommentCount: jest.fn(),
           },
         },
+        {
+          provide: ReportsService,
+          useValue: {
+            getReportedPostIdsByUser: jest.fn(),
+            createReport: jest.fn(),
+            getReportsForPost: jest.fn(),
+            getReportCountForPost: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -113,6 +124,7 @@ describe('PostsService', () => {
     storageService = module.get(StorageService);
     likesService = module.get(LikesService);
     commentsService = module.get(CommentsService);
+    reportsService = module.get(ReportsService);
   });
 
   describe('createPost', () => {
@@ -345,10 +357,12 @@ describe('PostsService', () => {
         addOrderBy: jest.fn().mockReturnThis(),
         take: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue(mockPosts),
       };
 
       postRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      reportsService.getReportedPostIdsByUser.mockResolvedValue([]);
       likesService.getLikeInfoForPosts.mockResolvedValue(
         new Map([
           ['post-1', { likeCount: 2, isLikedByMe: true }],
@@ -391,10 +405,12 @@ describe('PostsService', () => {
         addOrderBy: jest.fn().mockReturnThis(),
         take: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue(mockPosts),
       };
 
       postRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      reportsService.getReportedPostIdsByUser.mockResolvedValue([]);
       likesService.getLikeInfoForPosts.mockResolvedValue(new Map());
       commentsService.getCommentCounts.mockResolvedValue(new Map());
 
@@ -413,10 +429,12 @@ describe('PostsService', () => {
         addOrderBy: jest.fn().mockReturnThis(),
         take: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue([]),
       };
 
       postRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      reportsService.getReportedPostIdsByUser.mockResolvedValue([]);
       commentsService.getCommentCounts.mockResolvedValue(new Map());
 
       const result = await service.findPosts(10);

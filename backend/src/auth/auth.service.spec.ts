@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { AuthService } from './auth.service';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -155,6 +155,8 @@ describe('AuthService', () => {
       password: '$2a$10$hashedpassword', // bcrypt hashed
       username: 'testuser',
       loginCount: 0,
+      role: UserRole.USER,
+      isSuspended: false,
     };
 
     it('올바른 자격증명으로 로그인 시 토큰을 반환해야 한다', async () => {
@@ -188,6 +190,33 @@ describe('AuthService', () => {
       await expect(service.login(loginDto)).rejects.toThrow(
         '이메일 또는 비밀번호가 올바르지 않습니다.',
       );
+    });
+
+    it('정지된 계정으로 로그인 시 에러를 던져야 한다', async () => {
+      const suspendedUser = {
+        ...mockUser,
+        isSuspended: true,
+      };
+      mockUserRepository.findOne.mockResolvedValue(suspendedUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(service.login(loginDto)).rejects.toThrow(
+        '정지된 계정입니다. 관리자에게 문의하세요.',
+      );
+    });
+
+    it('로그인 응답에 role이 포함되어야 한다', async () => {
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      mockJwtService.sign.mockReturnValue('mock-token');
+      mockRefreshTokenRepository.create.mockReturnValue({});
+      mockRefreshTokenRepository.save.mockResolvedValue({});
+      mockUserRepository.update.mockResolvedValue({});
+
+      const result = await service.login(loginDto);
+
+      expect(result).toHaveProperty('role');
+      expect(result.role).toBe(UserRole.USER);
     });
   });
 
