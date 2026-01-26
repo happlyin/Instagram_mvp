@@ -464,7 +464,16 @@ function AdminPageContent() {
                           {user.email}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {user.username}
+                          {user.role === 'admin' ? (
+                            <span className="text-gray-500">{user.username}</span>
+                          ) : (
+                            <span
+                              onClick={() => router.push(`/admin/profile/${user.username}`)}
+                              className="cursor-pointer text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              {user.username}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
@@ -613,7 +622,12 @@ function AdminPageContent() {
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {post.author.username}
+                          <span
+                            onClick={() => router.push(`/admin/profile/${post.author.username}`)}
+                            className="cursor-pointer text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {post.author.username}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(post.createdAt).toLocaleDateString('ko-KR')}

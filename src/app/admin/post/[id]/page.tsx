@@ -246,7 +246,7 @@ export default function AdminPostDetailPage() {
       {/* 헤더 */}
       <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center">
-          <button onClick={() => router.push('/admin?tab=posts')} className="mr-4">
+          <button onClick={() => router.back()} className="mr-4">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
